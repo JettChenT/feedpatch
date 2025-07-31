@@ -43,20 +43,19 @@ export default defineContentScript({
         const text = (textEl as HTMLElement)?.innerText?.trim();
         const username = (userEl as HTMLElement)?.innerText?.trim();
         if (text && username) {
-          const triageTweet = async () => {
-            (article as HTMLElement).style.backgroundColor = "yellow";
-            const passed = await filterService.filter(text, criterias);
-            if (passed) {
-              (article as HTMLElement).style.backgroundColor = "green";
-            } else {
-              (article as HTMLElement).style.backgroundColor = "red";
-            }
-          };
-          triageTweet();
-
           const id = `${username}::${text}`;
           if (!scraped.has(id)) {
             scraped.add(id);
+            const triageTweet = async () => {
+              (article as HTMLElement).style.backgroundColor = "yellow";
+              const passed = await filterService.filter(text, criterias);
+              if (passed) {
+                (article as HTMLElement).style.backgroundColor = "green";
+              } else {
+                (article as HTMLElement).style.backgroundColor = "red";
+              }
+            };
+            triageTweet();
             results.push({ username, text, replies, reposts, likes, views });
             console.log(
               `@${username} — 💬 ${replies} 🔁 ${reposts} ❤️ ${likes} 👁️ ${views}\n> ${text}`,
