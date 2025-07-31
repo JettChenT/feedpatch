@@ -14,8 +14,8 @@ export default defineContentScript({
     const tweets: Map<string, Tweet> = new Map();
     const tasks: Map<string, Promise<boolean>> = new Map();
     const criterias = [
-      "Is brainrot (meme/clickbait)",
-      "Is spam / self promotion",
+      "Is spammy / obviously fake or clickbait",
+      "About films, tv, or the entertainment industry",
     ];
 
     const extractTweets = async () => {

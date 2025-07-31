@@ -4,9 +4,9 @@ import * as z from "zod";
 
 const filterSchema = z.object({
   reason: z.string().describe("Short explanation for the filter result"),
-  passFilter: z
+  fitsCriteria: z
     .boolean()
-    .describe("Whether the incoming text passes the criterias"),
+    .describe("Whether the incoming text passes any of the criterias"),
 });
 
 export class FilterService {
@@ -16,7 +16,7 @@ export class FilterService {
       {
         role: "system",
         content:
-          "You will determine whether the provided content fits first the provided criterias.",
+          "You will determine whether the provided content fits any one of the provided criterias",
       },
       {
         role: "system",
@@ -38,6 +38,6 @@ export class FilterService {
       schema: filterSchema,
     });
     console.log(result.object);
-    return result.object.passFilter;
+    return !result.object.fitsCriteria;
   }
 }
