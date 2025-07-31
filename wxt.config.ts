@@ -9,4 +9,12 @@ export default defineConfig({
     },
     chromiumArgs: ["--user-data-dir=./.wxt/browser-data"],
   },
+  manifest: {
+    web_accessible_resources: [
+      {
+        resources: ["x-mainworld.js"],
+        matches: ["*://*/*"],
+      },
+    ],
+  },
 });

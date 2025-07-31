@@ -1,4 +1,4 @@
-import { generateObject } from "ai";
+import { generateObject, type ModelMessage } from "ai";
 import { getModel, CHEAP_MODEL } from "./llm";
 import * as z from "zod";
 
@@ -10,12 +10,31 @@ const filterSchema = z.object({
 });
 
 export class FilterService {
-  async filter(text: string, criterias: string[]) {
+  async filter(content: ModelMessage[], criterias: string[]) {
     const model = getModel(CHEAP_MODEL);
-    const prompt = `Does the content "${text}" pass the following criterias: ${criterias.join(", ")}?`;
+    const messages: ModelMessage[] = [
+      {
+        role: "system",
+        content:
+          "You will determine whether the provided content fits first the provided criterias.",
+      },
+      {
+        role: "system",
+        content: `<criterias>\n ${criterias.join(", ")} \n</criterias>`,
+      },
+      {
+        role: "user",
+        content: "<content>",
+      },
+      ...content,
+      {
+        role: "user",
+        content: "</content>",
+      },
+    ];
     const result = await generateObject({
       model,
-      prompt,
+      messages,
       schema: filterSchema,
     });
     console.log(result.object);
