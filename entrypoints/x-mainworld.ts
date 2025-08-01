@@ -1,35 +1,130 @@
+import { onCommitFiberRoot, traverseFiber, getFiberFromHostInstance, getFiberStack } from 'bippy'; // must be imported BEFORE react
+import type { FPMessage } from '@/libs/messages';
+
 const handleResponseData = (url: string, data: any) => {
   console.debug("injected script response:", url, data);
-  window.postMessage({
+  const message: FPMessage = {
     type: "handleResponseData",
     url,
     data,
+  };
+  window.postMessage(message);
+};
+
+const extractTweetId = (article: HTMLElement): string | undefined => {
+  const fiber = getFiberFromHostInstance(article);
+  if (!fiber) {
+    return;
+  }
+  const fiberStack = getFiberStack(fiber);
+  if (!fiberStack) {
+    return;
+  }
+  const tweet = fiberStack.find((f) => f.type?.displayName === "Tweet");
+  if (!tweet) {
+    return;
+  }
+  // Access the tweet ID through the memoized props with proper type safety
+  const tweetData = (tweet.memoizedProps as any)?.tweet;
+  const tweetId = tweetData?.legacy?.id_str || tweetData?.id_str;
+  if (!tweetId) {
+    return;
+  }
+  return tweetId;
+};
+
+const seenTweets = new Set<string>();
+const tweetToArticleMap = new Map<string, HTMLElement>();
+
+const scanForTweets = () => {
+  const articles = document.querySelectorAll("article");
+  
+  articles.forEach((article) => {
+    const tweetId = extractTweetId(article);
+    if(!tweetId){
+      article.style.backgroundColor = "brown";
+      return;
+    }
+    if (tweetId ) {
+      seenTweets.add(tweetId);
+      // Store direct reference to article for later manipulation
+      tweetToArticleMap.set(tweetId, article as HTMLElement);
+      
+      const message: FPMessage = {
+        type: "tweetInDom",
+        tweetId,
+      };
+      window.postMessage(message);
+    }
   });
+};
+
+const handleManipulateTweet = (tweetId: string, style: string) => {
+  const article = tweetToArticleMap.get(tweetId);
+  if (!article) {
+    console.warn("Article not found for tweet ID:", tweetId);
+    return;
+  }
+
+  switch (style) {
+    case "highlight-positive":
+      article.style.backgroundColor = "green"; // light green
+      break;
+    case "highlight-negative":
+      article.style.backgroundColor = "red"; // light red
+      break;
+    case "highlight-processing":
+      article.style.backgroundColor = "yellow"; // light yellow
+      break;
+    default:
+      console.warn("Unknown style:", style);
+  }
 };
 
 export default defineUnlistedScript(() => {
   console.log("Hello from the main world!");
-  window.injected = "Hello from the injected script!";
 
+  // Listen for messages from content script
+  window.addEventListener("message", (event) => {
+    if (event.data?.type === "manipulateTweet") {
+      const { tweetId, style } = event.data;
+      handleManipulateTweet(tweetId, style);
+    }
+  });
+
+  // Set up DOM observation for new tweets
+  const observer = new MutationObserver(() => {
+    scanForTweets();
+  });
+
+  // Start observing when DOM is ready
+  if (document.body) {
+    observer.observe(document.body, { childList: true, subtree: true });
+    scanForTweets(); // Initial scan
+  } else {
+    document.addEventListener("DOMContentLoaded", () => {
+      observer.observe(document.body, { childList: true, subtree: true });
+      scanForTweets();
+    });
+  }
+
+  // Intercept network requests
   ((xhr) => {
     const XHR = XMLHttpRequest.prototype;
-
     const open = XHR.open;
     const send = XHR.send;
 
-    XHR.open = function (method, url) {
-      this._method = method;
-      this._url = url;
-      return open.apply(this, arguments);
+    XHR.open = function (method: string, url: string | URL) {
+      (this as any)._method = method;
+      (this as any)._url = url;
+      return open.apply(this, arguments as any);
     };
 
-    XHR.send = function (postData) {
-      // console.debug('injected script xhr request:', this._method, this._url, this.getAllResponseHeaders(), postData);
+    XHR.send = function (postData?: Document | XMLHttpRequestBodyInit | null) {
       this.addEventListener("load", function () {
-        // console.debug("injected script xhr response:", this.response);
-        handleResponseData(this._url, this.response);
+        handleResponseData((this as any)._url, this.response);
       });
-      return send.apply(this, arguments);
+      return send.apply(this, arguments as any);
     };
   })(XMLHttpRequest);
 
@@ -37,12 +132,10 @@ export default defineUnlistedScript(() => {
 
   window.fetch = async (...args) => {
     const response = await origFetch(...args);
-    // console.log('injected script fetch request:', args);
     response
       .clone()
-      .blob() // maybe json(), text(), blob()
+      .blob()
       .then((data) => {
-        // console.debug("injected script fetch response:", data);
         handleResponseData(args[0].toString(), data);
       })
       .catch((err) => console.debug(err));
