@@ -118,7 +118,9 @@ export type TimelineModule = {
     __typename: "TimelineTimelineModule";
     items: {
       entryId: string; // 'conversationthread-1866876425669871193-tweet-1866876038930951193'
-      item: TimelineTweet;
+      item: {
+        itemContent: TimelineTweet;
+      };
     }[]; // Comments to the tweets are also tweets
     displayType: "VerticalConversation";
   };
@@ -127,12 +129,13 @@ export type TimelineModule = {
 export type TimelineTweet = {
   __typename: "TimelineTweet";
   tweet_results: {
-    result: Tweet;
+    result: Tweet | TweetWithVisibilityResults;
   };
 };
 
 export type Tweet = {
   __typename: "Tweet";
+  rest_id: string;
   core: {
     user_results: {
       result: User;
@@ -161,7 +164,15 @@ export type Tweet = {
       user_mentions: UserMention[];
     };
   };
+  quoted_status_result?: {
+    result?: Tweet;
+  }
 };
+
+export type TweetWithVisibilityResults = {
+  __typename: "TweetWithVisibilityResults";
+  tweet: Tweet;
+}
 
 export type User = {
   __typename: "User";

@@ -1,3 +1,5 @@
+export type ManipulationStyle = "highlight-positive" | "highlight-negative" | "highlight-processing" | "highlight-dne";
+
 export type FPMessage = {
     type: "handleResponseData";
     url: string;
@@ -8,5 +10,5 @@ export type FPMessage = {
 } | {
     type: "manipulateTweet";
     tweetId: string;
-    style: "highlight-positive" | "highlight-negative" | "highlight-processing";
+    style: ManipulationStyle;
 }

@@ -1,4 +1,6 @@
-import type { TimelineItem, TimelineResponse } from "./types";
+import type { TimelineItem, TimelineResponse, TimelineModule } from "./types";
+
+export type TimelineEntry = TimelineItem | TimelineModule;
 
 export function handleXResponseData(url: string, data: string) {
   if (
@@ -10,16 +12,17 @@ export function handleXResponseData(url: string, data: string) {
 }
 
 function handleTimelineData(data: TimelineResponse) {
-  console.debug("handling X/Twitter timeline data", data);
+  console.log("handling X/Twitter timeline data", data);
   const instructions = data.data.home.home_timeline_urt.instructions;
-  let entries: TimelineItem[] = [];
+  let entries: TimelineEntry[] = [];
   instructions.map((instruction) => {
     if (instruction.type !== "TimelineAddEntries") {
       return;
     }
     const cur_entries = instruction.entries.filter(
-      (entry): entry is TimelineItem =>
-        entry.content.__typename === "TimelineTimelineItem",
+      (entry): entry is TimelineEntry =>
+        entry.content.__typename === "TimelineTimelineItem" ||
+        entry.content.__typename === "TimelineTimelineModule",
     );
     entries = entries.concat(cur_entries);
   });

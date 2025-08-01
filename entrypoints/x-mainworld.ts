@@ -77,6 +77,9 @@ const handleManipulateTweet = (tweetId: string, style: string) => {
     case "highlight-processing":
       article.style.backgroundColor = "yellow"; // light yellow
       break;
+    case "highlight-dne":
+      article.style.backgroundColor = "orange";
+      break;
     default:
       console.warn("Unknown style:", style);
   }
