@@ -1,6 +1,6 @@
 import { getFilterService } from "@/libs/FilterService";
 import { handleXResponseData } from "@/libs/x/ingest";
-import { getTweet, tweetToMessages } from "@/libs/x/processing";
+import { getTweet, isAd, tweetToMessages } from "@/libs/x/processing";
 import { Tweet } from "@/libs/x/types";
 import type { FPMessage } from "@/libs/messages";
 
@@ -33,6 +33,7 @@ export default defineContentScript({
       
       if (!task) {
         // No task exists yet, send processing and wait
+        console.log("No task exist for", tweetId)
         sendManipulationMessage(tweetId, "highlight-processing");
         return;
       }
@@ -59,7 +60,9 @@ export default defineContentScript({
       }
     };
 
-    const spawnFilterTask = (tweet: Tweet) => {
+    const spawnFilterTask = (tweet: Tweet, options: {
+      isAd?: boolean;
+    }) => {
       const tweetId = tweet.legacy?.id_str;
       if (!tweetId) {
         return;
@@ -68,7 +71,11 @@ export default defineContentScript({
       if (!tasks.has(tweetId)) {
         const task = (async () => {
           try {
-            console.log("Filtering tweet:", tweetId);
+            console.log("Filtering tweet:", tweetId, tweet);
+            if(options.isAd){
+              console.log("Skipping ad tweet:", tweetId, tweet);
+              return false;
+            }
             const shouldFilter = await filterService.filter(
               tweetToMessages(tweet),
               criterias,
@@ -94,7 +101,7 @@ export default defineContentScript({
 
       switch (data.type) {
         case "tweetInDom": {
-          console.log("Tweet discovered in DOM:", data.tweetId);
+          console.debug("Tweet discovered in DOM:", data.tweetId);
           handleTweetInDom(data.tweetId);
           break;
         }
@@ -103,11 +110,13 @@ export default defineContentScript({
           const { url, data: responseData } = data;
           const timelineData = handleXResponseData(url, responseData);
           if (timelineData) {
-            console.log("Processing timeline data:", timelineData.length, "items");
+            console.log("Processing timeline data:", timelineData);
             timelineData.forEach((dat) => {
               const tweet = getTweet(dat);
               if (tweet) {
-                spawnFilterTask(tweet);
+                spawnFilterTask(tweet, {
+                  isAd: isAd(dat),
+                });
               }
             });
           }

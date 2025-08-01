@@ -43,6 +43,7 @@ const scanForTweets = () => {
     const tweetId = extractTweetId(article);
     if(!tweetId){
       article.style.backgroundColor = "brown";
+      console.warn("no tweet id found for article", article);
       return;
     }
     if (tweetId ) {

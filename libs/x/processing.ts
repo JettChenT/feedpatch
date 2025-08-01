@@ -4,6 +4,10 @@ import { ModelMessage } from "ai";
 export const getTweet = (item: TimelineItem) =>
   item.content.itemContent.tweet_results.result;
 
+export const isAd = (item: TimelineItem) => 
+  item.entryId.startsWith("promoted-tweet-")
+
+
 export const tweetToMessages = (tweet: Tweet) => {
   const screenName = tweet.core.user_results.result.legacy.screen_name;
   const tweetText = tweet.legacy.full_text;
