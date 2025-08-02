@@ -1,0 +1,34 @@
+---
+globs: components/**/*,*.tsx
+description: Component styling and UI patterns
+---
+
+# Styling & Component Patterns
+
+## UI Framework
+- Tailwind CSS 4.x with shadcn/ui components
+- Use [components/ui/](mdc:components/ui/) for reusable components
+- Follow shadcn/ui patterns for component structure
+
+## Button Component Pattern
+From [components/ui/button.tsx](mdc:components/ui/button.tsx):
+- Use `class-variance-authority` for variant management
+- Support `asChild` prop with Radix Slot
+- Include proper TypeScript variant props
+- Use `cn()` utility for class merging
+
+## Styling Guidelines
+- Use semantic color tokens (primary, secondary, destructive, etc.)
+- Include focus-visible and accessibility states
+- Support dark mode variants
+- Use Tailwind arbitrary values sparingly
+
+## Icon Usage
+- Lucide React for consistent iconography
+- Size icons appropriately: `size-4` for buttons, etc.
+- Use semantic icon names (Plus, Trash2, Edit2, etc.)
+
+## Layout Patterns
+- Use flexbox for component layouts
+- Implement proper spacing with Tailwind spacing scale
+- Follow mobile-first responsive design principles

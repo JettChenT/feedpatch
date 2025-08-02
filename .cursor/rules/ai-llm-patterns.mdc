@@ -1,0 +1,34 @@
+---
+globs: libs/FilterService*.ts,libs/llm.ts
+---
+
+# AI/LLM Service Patterns
+
+## Service Architecture
+- Base service classes in [libs/FilterServiceBase.ts](mdc:libs/FilterServiceBase.ts)
+- Use AI SDK with structured output via `generateObject()`
+- Define Zod schemas for LLM response validation
+
+## LLM Integration
+- Model configuration in [libs/llm.ts](mdc:libs/llm.ts)
+- Use `CHEAP_MODEL` for content filtering operations
+- Structure prompts with system and user messages
+
+## Content Filtering
+```typescript
+const filterSchema = z.object({
+  reason: z.string().describe("Short explanation for the filter result"),
+  fitsCriteria: z.boolean().describe("Whether the incoming text passes any of the criterias"),
+});
+```
+
+## Message Patterns
+- Use `ModelMessage[]` type for conversation context
+- Wrap content in XML-style tags for clarity
+- Include criteria in system prompts
+- Return boolean results for filtering decisions
+
+## Error Handling
+- Log LLM responses for debugging
+- Handle API failures gracefully
+- Provide fallback behavior when AI is unavailable

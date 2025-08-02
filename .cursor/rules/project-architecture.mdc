@@ -1,0 +1,32 @@
+---
+alwaysApply: true
+---
+
+# FeedPatch Project Architecture
+
+This is a WXT-based browser extension for filtering X/Twitter content using AI. The project follows these architectural patterns:
+
+## Core Structure
+- **entrypoints/**: Browser extension entry points
+  - [popup/](mdc:entrypoints/popup/) - Extension popup UI (React app)
+  - [background.ts](mdc:entrypoints/background.ts) - Service worker
+  - [x-*.ts](mdc:entrypoints/) - Content scripts for X/Twitter integration
+- **libs/**: Core business logic and services
+  - [FilterService*.ts](mdc:libs/) - AI-powered content filtering
+  - [storage.ts](mdc:libs/storage.ts) - Extension storage management
+  - [query.ts](mdc:libs/query.ts) - React Query hooks
+  - [x/](mdc:libs/x/) - X/Twitter specific processing
+- **components/**: Reusable UI components following shadcn/ui patterns
+
+## Key Patterns
+- Use bun for package management and scripts (not npm)
+- WXT handles manifest generation and build process
+- Content filtering uses AI SDK with structured output via Zod schemas
+- React Query for state management and API calls
+- Tailwind CSS with shadcn/ui component system
+
+## Extension Architecture
+- Content scripts inject into X/Twitter pages
+- Background script handles cross-tab communication
+- Popup provides user interface for rule management
+- Storage API persists user rules and settings

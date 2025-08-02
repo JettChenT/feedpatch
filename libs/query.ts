@@ -1,5 +1,6 @@
 import { QueryClient } from "@tanstack/react-query";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { nanoid } from "nanoid";
 import { storageRuleItems, type Rule } from "./storage";
 
 export const queryClient = new QueryClient();
@@ -28,7 +29,7 @@ export function useAddRule() {
 			const currentRules = await storageRuleItems.getValue();
 			const rule: Rule = {
 				...newRule,
-				id: crypto.randomUUID(),
+				id: nanoid(),
 			};
 			const updatedRules = [...currentRules, rule];
 			await storageRuleItems.setValue(updatedRules);

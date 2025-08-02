@@ -1,0 +1,31 @@
+---
+globs: *.tsx,*.ts,components/**/*
+---
+
+# React & TypeScript Patterns
+
+## Component Structure
+- Use functional components with hooks
+- Import types with `type` keyword: `import type { Rule } from "@/libs/storage"`
+- Use React 19 patterns (latest version in project)
+
+## State Management
+- React Query for server state via [query.ts](mdc:libs/query.ts) hooks
+- useState for local component state
+- Custom hooks pattern: `useRules()`, `useAddRule()`, etc.
+
+## Type Definitions
+- Define types in separate files when shared (e.g., [libs/storage.ts](mdc:libs/storage.ts))
+- Use Zod schemas for runtime validation and type inference
+- Leverage AI SDK types for LLM integration
+
+## Import Patterns
+- Use `@/` alias for absolute imports (configured in tsconfig.json)
+- Group imports: React, third-party, local components, types
+- Use barrel exports where appropriate
+
+## Component Examples
+Follow patterns from [components/ui/button.tsx](mdc:components/ui/button.tsx) and [entrypoints/popup/App.tsx](mdc:entrypoints/popup/App.tsx) for:
+- shadcn/ui component structure
+- Variant props with class-variance-authority
+- Proper TypeScript component typing

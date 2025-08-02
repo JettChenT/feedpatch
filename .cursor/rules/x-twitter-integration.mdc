@@ -1,0 +1,33 @@
+---
+globs: entrypoints/x-*,libs/x/**/*
+description: X/Twitter platform integration patterns
+---
+
+# X/Twitter Integration Patterns
+
+## Content Script Structure
+- [entrypoints/x.content.ts](mdc:entrypoints/x.content.ts) - Main content script
+- [entrypoints/x-inj.content.ts](mdc:entrypoints/x-inj.content.ts) - Injection helper
+- [entrypoints/x-mainworld.ts](mdc:entrypoints/x-mainworld.ts) - Main world execution
+
+## X-Specific Libraries
+- [libs/x/types.ts](mdc:libs/x/types.ts) - X platform type definitions
+- [libs/x/ingest.ts](mdc:libs/x/ingest.ts) - Content extraction logic
+- [libs/x/processing.ts](mdc:libs/x/processing.ts) - Content processing pipeline
+
+## Integration Patterns
+- Use content scripts to monitor DOM changes
+- Extract tweet content and metadata
+- Apply filtering rules in real-time
+- Handle X's dynamic content loading
+- Maintain performance with efficient selectors
+
+## Message Passing
+- Coordinate between content scripts and main world
+- Use extension messaging API for popup communication
+- Handle cross-origin restrictions properly
+
+## DOM Interaction
+- Target X-specific CSS selectors and data attributes
+- Handle React component updates gracefully
+- Avoid breaking X's functionality while filtering content

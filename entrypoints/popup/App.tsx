@@ -7,8 +7,8 @@ import { Plus, Trash2, Edit2, X, Check } from "lucide-react";
 function App() {
   const [isAddingRule, setIsAddingRule] = useState(false);
   const [editingRule, setEditingRule] = useState<string | null>(null);
-  const [newRule, setNewRule] = useState<{ criteria: string; mode: "block" | "allow" }>({ criteria: "", mode: "block" });
-  const [editRule, setEditRule] = useState<{ criteria: string; mode: "block" | "allow" }>({ criteria: "", mode: "block" });
+  const [newRule, setNewRule] = useState<Omit<Rule, "id">>({ criteria: "", mode: "block" });
+  const [editRule, setEditRule] = useState<Omit<Rule, "id">>({ criteria: "", mode: "block" });
 
   const { data: rules = [], isLoading, error } = useRules();
   const addRuleMutation = useAddRule();

@@ -1,0 +1,28 @@
+---
+globs: entrypoints/*,wxt.config.ts
+---
+
+# WXT Browser Extension Patterns
+
+## Entry Points
+WXT uses file-based routing for extension entry points:
+- `entrypoints/background.ts` - Service worker
+- `entrypoints/popup/` - Popup UI (index.html + React)
+- `entrypoints/*.content.ts` - Content scripts
+- `entrypoints/*-mainworld.ts` - Main world scripts
+
+## Content Script Patterns
+- Use `x-*.content.ts` naming for X/Twitter specific scripts
+- Inject main world scripts using `x-mainworld.ts` pattern
+- Handle DOM manipulation and message passing between contexts
+
+## Configuration
+- [wxt.config.ts](mdc:wxt.config.ts) defines build settings
+- Use `@wxt-dev/module-react` for React integration
+- Configure permissions in manifest object
+- Set up web_accessible_resources for injected scripts
+
+## Development
+- `bun run dev` for development with hot reload
+- `bun run build` for production builds
+- Use Helium browser for testing (configured in wxt.config.ts)

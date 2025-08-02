@@ -1,0 +1,36 @@
+---
+alwaysApply: true
+---
+
+# Build & Development Patterns
+
+## Package Management
+Use bun for all package operations (not npm):
+- `bun install` - Install dependencies
+- `bun add <package>` - Add new dependencies
+- `bun run <script>` - Run package.json scripts
+
+## Development Scripts
+From [package.json](mdc:package.json):
+- `bun run dev` - Development with Helium browser
+- `bun run dev:firefox` - Development with Firefox
+- `bun run build` - Production build
+- `bun run compile` - TypeScript compilation check
+
+## Configuration Files
+- [wxt.config.ts](mdc:wxt.config.ts) - WXT build configuration
+- [tsconfig.json](mdc:tsconfig.json) - TypeScript settings
+- [components.json](mdc:components.json) - shadcn/ui configuration
+
+## File Organization
+- Keep entry points in `entrypoints/` directory
+- Place business logic in `libs/` directory
+- Store reusable components in `components/`
+- Use `assets/` for static resources
+- Follow WXT conventions for automatic processing
+
+## Build Artifacts
+- WXT generates manifest.json automatically
+- Built files go to `.output/` directory
+- Use `bun run zip` to create distributable packages
+- Test in multiple browsers using respective dev scripts
