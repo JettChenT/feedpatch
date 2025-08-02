@@ -17,6 +17,7 @@
   "dependencies": {
     "@ai-sdk/react": "^2.0.0-beta.32",
     "@openrouter/ai-sdk-provider": "1.0.0-beta.5",
+    "@preact/signals-core": "^1.11.0",
     "@radix-ui/react-slot": "^1.2.3",
     "@tailwindcss/vite": "^4.1.11",
     "@tanstack/react-query": "^5.84.1",

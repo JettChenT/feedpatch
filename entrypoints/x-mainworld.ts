@@ -1,9 +1,5 @@
-import {
-	onCommitFiberRoot,
-	traverseFiber,
-	getFiberFromHostInstance,
-	getFiberStack,
-} from "bippy"; // must be imported BEFORE react
+import { getFiberFromHostInstance, getFiberStack } from "bippy"; // must be imported BEFORE react
+import { signal, effect } from "@preact/signals-core";
 import type { FPMessage } from "@/libs/messages";
 
 const handleResponseData = (url: string, data: any) => {
@@ -41,6 +37,9 @@ const extractTweetId = (article: HTMLElement): string | undefined => {
 const seenTweets = new Set<string>();
 const tweetToArticleMap = new Map<string, HTMLElement>();
 
+// Reactive state for tweet manipulations
+const tweetManipulations = signal<Map<string, string>>(new Map());
+
 const scanForTweets = () => {
 	const articles = document.querySelectorAll("article");
 
@@ -66,18 +65,29 @@ const scanForTweets = () => {
 };
 
 const handleManipulateTweet = (tweetId: string, style: string) => {
+	// Update the reactive state instead of directly manipulating DOM
+	const currentManipulations = new Map(tweetManipulations.value);
+	currentManipulations.set(tweetId, style);
+	tweetManipulations.value = currentManipulations;
+};
+
+// Apply styles based on the manipulation data
+const applyTweetStyle = (tweetId: string, style: string) => {
 	const article = tweetToArticleMap.get(tweetId);
 	if (!article) {
 		console.warn("Article not found for tweet ID:", tweetId);
 		return;
 	}
 
+	article.style.backgroundColor = "";
+	article.style.display = "block";
 	switch (style) {
 		case "highlight-positive":
-			article.style.backgroundColor = "green"; // light green
+			// article.style.backgroundColor = "green"; // light green
 			break;
 		case "highlight-negative":
 			article.style.backgroundColor = "red"; // light red
+			article.style.display = "none";
 			break;
 		case "highlight-processing":
 			article.style.backgroundColor = "yellow"; // light yellow
@@ -109,10 +119,10 @@ export default defineUnlistedScript(() => {
 			case "requestRescan": {
 				// Clear visual styling and rescan all tweets
 				console.log("Rescanning tweets due to rule changes");
+				// Clear all manipulations - this will trigger the effect to reset all styles
+				tweetManipulations.value = new Map();
+				// Notify content script about all existing tweets again
 				tweetToArticleMap.forEach((article, tweetId) => {
-					// Reset styling
-					article.style.backgroundColor = "";
-					// Notify content script about the tweet again
 					const message: FPMessage = {
 						type: "tweetInDom",
 						tweetId,
@@ -122,6 +132,21 @@ export default defineUnlistedScript(() => {
 				break;
 			}
 		}
+	});
+
+	// Set up reactive effect to apply tweet manipulations
+	effect(() => {
+		const manipulations = tweetManipulations.value;
+
+		// First, reset all articles to default styling
+		tweetToArticleMap.forEach((article) => {
+			article.style.backgroundColor = "";
+		});
+
+		// Then apply current manipulations
+		manipulations.forEach((style, tweetId) => {
+			applyTweetStyle(tweetId, style);
+		});
 	});
 
 	// Set up DOM observation for new tweets
