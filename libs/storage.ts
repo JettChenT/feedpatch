@@ -1,6 +1,7 @@
 import * as z from "zod";
 
 export const ruleSchema = z.object({
+	id: z.string(),
 	criteria: z.string(),
 	mode: z.enum(["block", "allow"]),
 });
