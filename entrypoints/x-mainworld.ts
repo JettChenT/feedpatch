@@ -39,6 +39,8 @@ const tweetToArticleMap = new Map<string, HTMLElement>();
 
 // Reactive state for tweet manipulations
 const tweetManipulations = signal<Map<string, string>>(new Map());
+// Reactive state for debug mode
+const debugMode = signal<boolean>(false);
 
 const scanForTweets = () => {
 	const articles = document.querySelectorAll("article");
@@ -72,28 +74,37 @@ const handleManipulateTweet = (tweetId: string, style: string) => {
 };
 
 // Apply styles based on the manipulation data
-const applyTweetStyle = (tweetId: string, style: string) => {
+const applyTweetStyle = (
+	tweetId: string,
+	style: string,
+	isDebug: boolean = false,
+) => {
 	const article = tweetToArticleMap.get(tweetId);
 	if (!article) {
 		console.warn("Article not found for tweet ID:", tweetId);
 		return;
 	}
 
-	article.style.backgroundColor = "";
-	article.style.display = "block";
 	switch (style) {
 		case "highlight-positive":
-			// article.style.backgroundColor = "green"; // light green
+			if (isDebug) {
+				article.style.backgroundColor = "green"; // visible green when debugging
+			}
 			break;
 		case "highlight-negative":
-			article.style.backgroundColor = "red"; // light red
-			article.style.display = "none";
+			article.style.backgroundColor = "red"; // red background
+			if (!isDebug) {
+				article.style.display = "none"; // hide when not debugging
+			}
+			// When debugging, stays visible with red background
 			break;
 		case "highlight-processing":
 			article.style.backgroundColor = "yellow"; // light yellow
 			break;
 		case "highlight-dne":
-			article.style.backgroundColor = "orange";
+			if (isDebug) {
+				article.style.backgroundColor = "orange";
+			}
 			break;
 		default:
 			console.warn("Unknown style:", style);
@@ -131,21 +142,29 @@ export default defineUnlistedScript(() => {
 				});
 				break;
 			}
+			case "debugModeChanged": {
+				const { isDebug } = data;
+				console.log("Debug mode changed:", isDebug);
+				debugMode.value = isDebug;
+				break;
+			}
 		}
 	});
 
 	// Set up reactive effect to apply tweet manipulations
 	effect(() => {
 		const manipulations = tweetManipulations.value;
+		const isDebug = debugMode.value;
 
 		// First, reset all articles to default styling
 		tweetToArticleMap.forEach((article) => {
 			article.style.backgroundColor = "";
+			article.style.display = "block";
 		});
 
-		// Then apply current manipulations
+		// Then apply current manipulations with debug context
 		manipulations.forEach((style, tweetId) => {
-			applyTweetStyle(tweetId, style);
+			applyTweetStyle(tweetId, style, isDebug);
 		});
 	});
 

@@ -1,13 +1,14 @@
 import { QueryClient } from "@tanstack/react-query";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { nanoid } from "nanoid";
-import { storageRuleItems, type Rule } from "./storage";
+import { storageRuleItems, storageDebugConfig, type Rule } from "./storage";
 
 export const queryClient = new QueryClient();
 
 // Query keys
 export const QUERY_KEYS = {
 	rules: ["rules"] as const,
+	debug: ["debug"] as const,
 };
 
 // Custom hooks for rules management
@@ -77,6 +78,31 @@ export function useDeleteRule() {
 		},
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: QUERY_KEYS.rules });
+		},
+	});
+}
+
+// Custom hooks for debug configuration management
+export function useDebugConfig() {
+	return useQuery({
+		queryKey: QUERY_KEYS.debug,
+		queryFn: async () => {
+			const isDebug = await storageDebugConfig.getValue();
+			return isDebug;
+		},
+	});
+}
+
+export function useToggleDebug() {
+	const queryClient = useQueryClient();
+
+	return useMutation({
+		mutationFn: async (isDebug: boolean) => {
+			await storageDebugConfig.setValue(isDebug);
+			return isDebug;
+		},
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: QUERY_KEYS.debug });
 		},
 	});
 }

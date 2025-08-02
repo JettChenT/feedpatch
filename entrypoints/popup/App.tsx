@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { useRules, useAddRule, useUpdateRule, useDeleteRule } from "@/libs/query";
+import { useRules, useAddRule, useUpdateRule, useDeleteRule, useDebugConfig, useToggleDebug } from "@/libs/query";
 import type { Rule } from "@/libs/storage";
 import { Plus, Trash2, Edit2, X, Check } from "lucide-react";
 
@@ -11,9 +11,11 @@ function App() {
   const [editRule, setEditRule] = useState<Omit<Rule, "id">>({ criteria: "", mode: "block" });
 
   const { data: rules = [], isLoading, error } = useRules();
+  const { data: isDebug = false } = useDebugConfig();
   const addRuleMutation = useAddRule();
   const updateRuleMutation = useUpdateRule();
   const deleteRuleMutation = useDeleteRule();
+  const toggleDebugMutation = useToggleDebug();
 
   const handleAddRule = async () => {
     if (newRule.criteria.trim()) {
@@ -33,6 +35,10 @@ function App() {
 
   const handleDeleteRule = async (id: string) => {
     await deleteRuleMutation.mutateAsync(id);
+  };
+
+  const handleToggleDebug = async () => {
+    await toggleDebugMutation.mutateAsync(!isDebug);
   };
 
   const startEditing = (rule: Rule) => {
@@ -69,7 +75,26 @@ function App() {
   return (
     <div className="w-[400px] h-[600px] p-4 flex flex-col">
       <div className="flex items-center justify-between mb-4">
-        <h1 className="text-2xl font-bold">Filter Rules</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-2xl font-bold">FeedPatch</h1>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-600 dark:text-gray-400">Debug</span>
+            <button
+              type="button"
+              onClick={handleToggleDebug}
+              disabled={toggleDebugMutation.isPending}
+              className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                isDebug ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'
+              }`}
+            >
+              <span
+                className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${
+                  isDebug ? 'translate-x-5' : 'translate-x-1'
+                }`}
+              />
+            </button>
+          </div>
+        </div>
         <Button
           onClick={() => setIsAddingRule(true)}
           size="sm"

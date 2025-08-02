@@ -12,3 +12,11 @@ export type Rule = z.infer<typeof ruleSchema>;
 export const storageRuleItems = storage.defineItem<Rule[]>("sync:ruleItems", {
 	defaultValue: [],
 });
+
+// Define storage for debug configuration
+export const storageDebugConfig = storage.defineItem<boolean>(
+	"sync:debugConfig",
+	{
+		defaultValue: false,
+	},
+);

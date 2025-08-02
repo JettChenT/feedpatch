@@ -21,4 +21,8 @@ export type FPMessage =
 	  }
 	| {
 			type: "requestRescan";
+	  }
+	| {
+			type: "debugModeChanged";
+			isDebug: boolean;
 	  };

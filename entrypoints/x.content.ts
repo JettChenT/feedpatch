@@ -12,7 +12,11 @@ import {
 } from "@/libs/x/processing";
 import type { TimelineItem, TimelineModule, Tweet } from "@/libs/x/types";
 import type { FPMessage, ManipulationStyle } from "@/libs/messages";
-import { storageRuleItems, type Rule } from "@/libs/storage";
+import {
+	storageRuleItems,
+	storageDebugConfig,
+	type Rule,
+} from "@/libs/storage";
 
 export default defineContentScript({
 	matches: ["*://x.com/*"],
@@ -20,6 +24,21 @@ export default defineContentScript({
 		const filterService = getFilterService();
 		await injectScript("/x-mainworld.js", { keepInDom: true });
 		console.log("Content script loaded - main triaging hub active");
+
+		// Send initial debug state to main world
+		const sendInitialDebugState = async () => {
+			const isDebug = await storageDebugConfig.getValue();
+			const message: FPMessage = {
+				type: "debugModeChanged",
+				isDebug,
+			};
+			window.postMessage(message);
+		};
+
+		// Send initial state after 50ms delay
+		setTimeout(() => {
+			sendInitialDebugState();
+		}, 50);
 
 		// Storage for processing tasks
 		const tasks: Map<string, Promise<FilterResult>> = new Map();
@@ -54,6 +73,15 @@ export default defineContentScript({
 			if (rulesChanged) {
 				invalidateCache();
 			}
+		});
+
+		// Listen for debug config changes and notify main world
+		storageDebugConfig.watch((newDebug) => {
+			const message: FPMessage = {
+				type: "debugModeChanged",
+				isDebug: newDebug,
+			};
+			window.postMessage(message);
 		});
 
 		const filterResultToStyle = (result: FilterResult): ManipulationStyle => {
