@@ -17,11 +17,18 @@ import {
 	storageDebugConfig,
 	type Rule,
 } from "@/libs/storage";
+import {
+	sendMessage,
+	onMessage,
+	allowWindowMessaging,
+} from "webext-bridge/content-script";
 
 export default defineContentScript({
 	matches: ["*://x.com/*"],
-	async main() {
+	async main(ctx) {
 		const filterService = getFilterService();
+
+		allowWindowMessaging("main");
 		await injectScript("/x-mainworld.js", { keepInDom: true });
 		console.log("Content script loaded - main triaging hub active");
 
@@ -278,6 +285,11 @@ export default defineContentScript({
 					break;
 				}
 			}
+		});
+
+		onMessage("tstHello", async (message) => {
+			console.debug("hello message", message);
+			return { hello: "world" };
 		});
 
 		console.log("Tweet triaging system ready!");

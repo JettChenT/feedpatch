@@ -1,6 +1,8 @@
 import { getFiberFromHostInstance, getFiberStack } from "bippy"; // must be imported BEFORE react
 import { signal, effect } from "@preact/signals-core";
 import type { FPMessage } from "@/libs/messages";
+import { setupNetworkInterception } from "@/libs/networkInterceptor";
+import { sendMessage, setNamespace } from "webext-bridge/window";
 
 const handleResponseData = (url: string, data: any) => {
 	console.debug("injected script response:", url, data);
@@ -113,6 +115,7 @@ const applyTweetStyle = (
 
 export default defineUnlistedScript(() => {
 	console.log("Hello from the main world!");
+	setNamespace("main");
 
 	// Listen for messages from content script
 	window.addEventListener("message", (event) => {
@@ -184,37 +187,15 @@ export default defineUnlistedScript(() => {
 		});
 	}
 
-	// Intercept network requests
-	((xhr) => {
-		const XHR = XMLHttpRequest.prototype;
-		const open = XHR.open;
-		const send = XHR.send;
+	setTimeout(async () => {
+		const res = await sendMessage(
+			"tstHello",
+			{ hello: "world" },
+			"content-script",
+		);
+		console.log("tstHello", res);
+	}, 1000);
 
-		XHR.open = function (method: string, url: string | URL) {
-			(this as any)._method = method;
-			(this as any)._url = url;
-			return open.apply(this, arguments as any);
-		};
-
-		XHR.send = function (postData?: Document | XMLHttpRequestBodyInit | null) {
-			this.addEventListener("load", function () {
-				handleResponseData((this as any)._url, this.response);
-			});
-			return send.apply(this, arguments as any);
-		};
-	})(XMLHttpRequest);
-
-	const { fetch: origFetch } = window;
-
-	window.fetch = async (...args) => {
-		const response = await origFetch(...args);
-		response
-			.clone()
-			.blob()
-			.then((data) => {
-				handleResponseData(args[0].toString(), data);
-			})
-			.catch((err) => console.debug(err));
-		return response;
-	};
+	// Set up network interception
+	setupNetworkInterception(handleResponseData);
 });
