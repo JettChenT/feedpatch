@@ -19,38 +19,38 @@ import {
 } from "@/libs/storage";
 import {
 	sendMessage,
-	onMessage,
 	allowWindowMessaging,
 } from "webext-bridge/content-script";
 
 export default defineContentScript({
 	matches: ["*://x.com/*"],
-	async main(ctx) {
+	async main() {
 		const filterService = getFilterService();
 
 		allowWindowMessaging("main");
 		await injectScript("/x-mainworld.js", { keepInDom: true });
 		console.log("Content script loaded - main triaging hub active");
 
-		// Send initial debug state to main world
-		const sendInitialDebugState = async () => {
-			const isDebug = await storageDebugConfig.getValue();
-			const message: FPMessage = {
-				type: "debugModeChanged",
-				isDebug,
-			};
-			window.postMessage(message);
+		// Initialize debug state
+		const initializeDebugState = async () => {
+			isDebugMode = await storageDebugConfig.getValue();
 		};
 
-		// Send initial state after 50ms delay
+		// Initialize state after 50ms delay
 		setTimeout(() => {
-			sendInitialDebugState();
+			initializeDebugState();
 		}, 50);
 
 		// Storage for processing tasks
 		const tasks: Map<string, Promise<FilterResult>> = new Map();
 		// Storage for tweet data (for rescanning when rules change)
 		const tweetCache: Map<string, { tweet: Tweet; isAd: boolean }> = new Map();
+
+		// DOM manipulation state
+		const seenTweets = new Set<string>();
+		const tweetToArticleMap = new Map<string, HTMLElement>();
+		const tweetManipulations = new Map<string, ManipulationStyle>();
+		let isDebugMode = false;
 
 		// Get rules from storage
 		const getRules = async (): Promise<Rule[]> => {
@@ -65,11 +65,15 @@ export default defineContentScript({
 			);
 			tasks.clear();
 
-			// Re-process all currently visible tweets
-			const message: FPMessage = {
-				type: "requestRescan",
-			};
-			window.postMessage(message);
+			// Clear current manipulations and re-process all visible tweets
+			tweetManipulations.clear();
+			tweetToArticleMap.forEach((article, tweetId) => {
+				// Reset styling
+				article.style.backgroundColor = "";
+				article.style.display = "block";
+				// Re-process the tweet
+				handleTweetInDom(tweetId);
+			});
 		};
 
 		// Listen for rule changes and invalidate cache
@@ -82,13 +86,13 @@ export default defineContentScript({
 			}
 		});
 
-		// Listen for debug config changes and notify main world
+		// Listen for debug config changes and update local state
 		storageDebugConfig.watch((newDebug) => {
-			const message: FPMessage = {
-				type: "debugModeChanged",
-				isDebug: newDebug,
-			};
-			window.postMessage(message);
+			isDebugMode = newDebug;
+			// Re-apply all current manipulations with new debug mode
+			tweetManipulations.forEach((style, tweetId) => {
+				applyTweetStyle(tweetId, style);
+			});
 		});
 
 		const filterResultToStyle = (result: FilterResult): ManipulationStyle => {
@@ -97,16 +101,98 @@ export default defineContentScript({
 				: "highlight-positive";
 		};
 
-		const sendManipulationMessage = (
-			tweetId: string,
-			style: ManipulationStyle,
-		) => {
-			const message: FPMessage = {
-				type: "manipulateTweet",
-				tweetId,
-				style,
-			};
-			window.postMessage(message);
+		// DOM manipulation functions
+		const getTweetIdFromArticle = async (
+			article: HTMLElement,
+		): Promise<string | undefined> => {
+			try {
+				const ariaLabelledBy = article.getAttribute("aria-labelledby");
+				if (!ariaLabelledBy) {
+					console.warn("No aria-labelledby found on article:", article);
+					return undefined;
+				}
+
+				const result = await sendMessage(
+					"xGetTweetId",
+					{
+						selector: `[aria-labelledby="${ariaLabelledBy}"]`,
+					},
+					"window",
+				);
+				return result.tweetId;
+			} catch (error) {
+				console.warn("Failed to get tweet ID from article:", error);
+				return undefined;
+			}
+		};
+
+		const applyTweetStyle = (tweetId: string, style: ManipulationStyle) => {
+			const article = tweetToArticleMap.get(tweetId);
+			if (!article) {
+				console.warn("Article not found for tweet ID:", tweetId);
+				return;
+			}
+
+			// Reset styles first
+			article.style.backgroundColor = "";
+			article.style.display = "block";
+
+			switch (style) {
+				case "highlight-positive":
+					if (isDebugMode) {
+						article.style.backgroundColor = "green"; // visible green when debugging
+					}
+					break;
+				case "highlight-negative":
+					article.style.backgroundColor = "red"; // red background
+					if (!isDebugMode) {
+						article.style.display = "none"; // hide when not debugging
+					}
+					break;
+				case "highlight-processing":
+					article.style.backgroundColor = "yellow"; // light yellow
+					break;
+				case "highlight-dne":
+					if (isDebugMode) {
+						article.style.backgroundColor = "orange";
+					}
+					break;
+				default:
+					console.warn("Unknown style:", style);
+			}
+		};
+
+		const scanForTweets = async () => {
+			console.log("scanning for tweets");
+			const articles = Array.from(document.querySelectorAll("article"));
+
+			const tweetIdPromises = articles.map(async (article) => {
+				const tweetId = await getTweetIdFromArticle(article as HTMLElement);
+				return { article, tweetId };
+			});
+
+			const results = await Promise.all(tweetIdPromises);
+
+			for (const { article, tweetId } of results) {
+				if (!tweetId) {
+					if (isDebugMode) {
+						(article as HTMLElement).style.backgroundColor = "brown";
+					}
+					console.warn("no tweet id found for article", article);
+					continue;
+				}
+
+				seenTweets.add(tweetId);
+				// Store direct reference to article for later manipulation
+				tweetToArticleMap.set(tweetId, article as HTMLElement);
+				// Process the tweet
+				handleTweetInDom(tweetId);
+			}
+		};
+
+		const manipulateTweet = (tweetId: string, style: ManipulationStyle) => {
+			tweetManipulations.set(tweetId, style);
+			applyTweetStyle(tweetId, style);
 		};
 
 		const handleTweetInDom = async (tweetId: string) => {
@@ -124,7 +210,7 @@ export default defineContentScript({
 				if (!task) {
 					// Still no task - tweet data not available
 					console.log("No task exist for", tweetId);
-					sendManipulationMessage(tweetId, "highlight-dne");
+					manipulateTweet(tweetId, "highlight-dne");
 					return;
 				}
 			}
@@ -138,16 +224,16 @@ export default defineContentScript({
 
 				if (result !== null) {
 					// Task is already completed
-					sendManipulationMessage(tweetId, filterResultToStyle(result));
+					manipulateTweet(tweetId, filterResultToStyle(result));
 				} else {
 					// Task is still running, send processing then wait
-					sendManipulationMessage(tweetId, "highlight-processing");
+					manipulateTweet(tweetId, "highlight-processing");
 					const filterResult = await task;
-					sendManipulationMessage(tweetId, filterResultToStyle(filterResult));
+					manipulateTweet(tweetId, filterResultToStyle(filterResult));
 				}
 			} catch (error) {
 				console.error("Error processing tweet:", tweetId, error);
-				sendManipulationMessage(tweetId, "highlight-negative"); // Default to showing
+				manipulateTweet(tweetId, "highlight-negative"); // Default to showing
 			}
 		};
 
@@ -242,6 +328,27 @@ export default defineContentScript({
 			});
 		};
 
+		// Set up DOM observation for new tweets
+		const observer = new MutationObserver(() => {
+			scanForTweets();
+		});
+
+		// Start observing when DOM is ready
+		const startObservation = () => {
+			if (document.body) {
+				observer.observe(document.body, { childList: true, subtree: true });
+				scanForTweets(); // Initial scan
+			} else {
+				document.addEventListener("DOMContentLoaded", () => {
+					observer.observe(document.body, { childList: true, subtree: true });
+					scanForTweets();
+				});
+			}
+		};
+
+		// Initialize DOM observation after a short delay to ensure page is ready
+		setTimeout(startObservation, 100);
+
 		// Listen for messages from main world
 		window.addEventListener("message", (event) => {
 			const data = event.data as FPMessage;
@@ -250,12 +357,6 @@ export default defineContentScript({
 			}
 
 			switch (data.type) {
-				case "tweetInDom": {
-					console.debug("Tweet discovered in DOM:", data.tweetId);
-					handleTweetInDom(data.tweetId);
-					break;
-				}
-
 				case "handleResponseData": {
 					const { url, data: responseData } = data;
 					const timelineData = handleXResponseData(url, responseData);
@@ -285,11 +386,6 @@ export default defineContentScript({
 					break;
 				}
 			}
-		});
-
-		onMessage("tstHello", async (message) => {
-			console.debug("hello message", message);
-			return { hello: "world" };
 		});
 
 		console.log("Tweet triaging system ready!");
