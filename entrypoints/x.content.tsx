@@ -1,3 +1,4 @@
+import "@/assets/tailwind.css"
 import { getFilterService } from "@/libs/FilterService";
 import type { FilterResult } from "@/libs/FilterServiceBase";
 import { handleXResponseData } from "@/libs/x/ingest";
@@ -21,10 +22,13 @@ import {
 	sendMessage,
 	allowWindowMessaging,
 } from "webext-bridge/content-script";
+import { createRoot, Root } from "react-dom/client";
+import { ShadowRootContentScriptUi } from "#imports";
 
 export default defineContentScript({
 	matches: ["*://x.com/*"],
-	async main() {
+	cssInjectionMode: "ui",
+	async main(ctx) {
 		const filterService = getFilterService();
 
 		allowWindowMessaging("main");
@@ -50,6 +54,7 @@ export default defineContentScript({
 		const seenTweets = new Set<string>();
 		const tweetToArticleMap = new Map<string, HTMLElement>();
 		const tweetManipulations = new Map<string, ManipulationStyle>();
+		const tweetUi = new Map<string, ShadowRootContentScriptUi<{root: Root, wrapper: HTMLElement}>>();
 		let isDebugMode = false;
 
 		// Get rules from storage
@@ -126,7 +131,7 @@ export default defineContentScript({
 			}
 		};
 
-		const applyTweetStyle = (tweetId: string, style: ManipulationStyle) => {
+		const applyTweetStyle = async (tweetId: string, style: ManipulationStyle) => {
 			const article = tweetToArticleMap.get(tweetId);
 			if (!article) {
 				console.warn("Article not found for tweet ID:", tweetId);
@@ -160,6 +165,34 @@ export default defineContentScript({
 				default:
 					console.warn("Unknown style:", style);
 			}
+
+			if (tweetUi.get(tweetId)) {
+				let ui = tweetUi.get(tweetId);
+				if(ui!==undefined && ui.mounted === undefined){
+					ui.mount()
+				}
+				return;
+			}
+
+			const ui = await createShadowRootUi(ctx, {
+				name: "tweet-indicator",
+				position: "inline",
+				anchor: article,
+				onMount(container){
+					const wrapper = document.createElement('div');
+					container.append(wrapper);
+					const root = createRoot(wrapper)
+					root.render(<XWidget/>)
+					return {root, wrapper}
+				},
+				onRemove: (elements) => {
+					elements?.root.unmount();
+					elements?.wrapper.remove();
+					tweetUi.delete(tweetId);
+				},
+			});
+			ui.mount()
+			tweetUi.set(tweetId, ui);
 		};
 
 		const scanForTweets = async () => {
@@ -258,7 +291,7 @@ export default defineContentScript({
 						console.log("Filtering tweet:", tweetId, tweet);
 						if (options.isAd) {
 							console.log("Skipping ad tweet:", tweetId, tweet);
-							return { type: "block", reason: "Statically detected Ad" };
+						return { type: "block", reason: "Statically detected Ad" };
 						}
 						const rules = await getRules();
 						const filterResult = await filterService.filter(
