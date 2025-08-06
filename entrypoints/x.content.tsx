@@ -26,8 +26,16 @@ const getTweetStates = async () => {
 
 const setTweetStates = async (tweetStates: Map<string, TweetState>) => {
 	const newValue = Object.fromEntries(tweetStates.entries());
-	console.log("setTweetStates", newValue);
+	console.debug("setTweetStates", newValue);
 	await storageXTweetState.setValue(newValue);
+}
+
+const updateTweetState = async (tweetId: string, update: Partial<TweetState>) => {
+	const curStorage = await getTweetStates();
+	const curState = curStorage.get(tweetId);
+	if (!curState) return;
+	curStorage.set(tweetId, { ...curState, ...update });
+	await setTweetStates(curStorage);
 }
 
 const getTweetIdFromArticle = async (
@@ -112,6 +120,9 @@ export default defineContentScript({
 					const abortController = new AbortController();
 					const curTask = taskMap.get(tweetId);
 					if (curTask && !isFinished(curTask)) curTask.abortController.abort();
+					await updateTweetState(tweetId, {
+						filterResult: undefined,
+					});
 
 					const tsk = async () => {
 						const filterResult: FilterResult = isAd(entry as TimelineItem)
@@ -157,6 +168,11 @@ export default defineContentScript({
                     })
 
                     const abortController = new AbortController();
+					await Promise.all(tweetIds.map(async (tweetId) => {
+						await updateTweetState(tweetId, {
+							filterResult: undefined,
+						});
+					}));
                     const tsk = async () => {
                         const filterResult = await filterService.filter(
                             moduleToMessages(module),
@@ -230,10 +246,10 @@ export default defineContentScript({
             }
             
             if(hasUpdates){
-				console.log("hasUpdates", curStorage);
-				console.log("before", await storageXTweetState.getValue());
+				console.debug("hasUpdates", curStorage);
+				console.debug("before", await storageXTweetState.getValue());
                 await setTweetStates(curStorage);
-				console.log("after", await storageXTweetState.getValue());
+				console.debug("after", await storageXTweetState.getValue());
             }
         }
 
@@ -262,7 +278,7 @@ export default defineContentScript({
 
 			const results = await Promise.all(tweetIdPromises);
 			const tweetStates = await getTweetStates();
-			console.log("tweetStates", tweetStates, typeof tweetStates);
+			console.debug("tweetStates", tweetStates, typeof tweetStates);
 			const isDebug = await storageDebugConfig.getValue();
 
 			const renderTweetModPromises = results.map(
