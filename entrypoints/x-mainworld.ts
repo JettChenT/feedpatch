@@ -1,16 +1,10 @@
 import { getFiberFromHostInstance, getFiberStack } from "bippy"; // must be imported BEFORE react
-import type { FPMessage } from "@/libs/messages";
 import { setupNetworkInterception } from "@/libs/networkInterceptor";
-import { setNamespace, onMessage } from "webext-bridge/window";
+import { setNamespace, onMessage, sendMessage } from "webext-bridge/window";
 
-const handleResponseData = (url: string, data: unknown) => {
+const handleResponseData = (url: string, data: string) => {
 	console.debug("injected script response:", url, data);
-	const message: FPMessage = {
-		type: "handleResponseData",
-		url,
-		data,
-	};
-	window.postMessage(message);
+	sendMessage("handleResponseData", { url, data }, "content-script");
 };
 
 const extractTweetId = (article: HTMLElement): string | undefined => {

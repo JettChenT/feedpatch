@@ -22,14 +22,17 @@ const ruleToPrompt = (rule: Rule): string => {
 	return msgText;
 };
 
-export type FilterResult =
-	| {
-			type: "block";
-			reason: string;
-	  }
-	| {
-			type: "pass";
-	  };
+export const filterResultSchema = z.discriminatedUnion("type", [
+	z.object({
+		type: z.literal("block"),
+		reason: z.string(),
+	}),
+	z.object({
+		type: z.literal("pass"),
+	}),
+]);
+
+export type FilterResult = z.infer<typeof filterResultSchema>;
 
 export class FilterService {
 	async filter(content: ModelMessage[], rules: Rule[]): Promise<FilterResult> {

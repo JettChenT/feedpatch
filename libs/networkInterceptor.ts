@@ -2,7 +2,7 @@
  * Network interceptor utility for capturing fetch and XMLHttpRequest responses
  */
 
-type ResponseHandler = (url: string, data: unknown) => void;
+type ResponseHandler = (url: string, data: string) => void;
 
 interface ExtendedXMLHttpRequest extends XMLHttpRequest {
 	_method?: string;
@@ -53,7 +53,7 @@ export function setupNetworkInterception(
 			.clone()
 			.blob()
 			.then((data) => {
-				handleResponseData(args[0].toString(), data);
+				handleResponseData(args[0].toString(), data.toString());
 			})
 			.catch((err) => console.debug(err));
 		return response;
