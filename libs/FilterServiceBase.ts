@@ -34,6 +34,7 @@ export const filterResultSchema = z.discriminatedUnion("type", [
 
 export type FilterResult = z.infer<typeof filterResultSchema>;
 
+// TODO: there is no way to pass abortController as arg as it is not serializable
 export class FilterService {
 	async filter(content: ModelMessage[], rules: Rule[]): Promise<FilterResult> {
 		const model = getModel(CHEAP_MODEL);

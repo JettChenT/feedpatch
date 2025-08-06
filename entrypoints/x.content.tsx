@@ -1,23 +1,29 @@
 import { getFilterService } from "@/libs/FilterService";
-import { FilterResult } from "@/libs/FilterServiceBase";
+import type { FilterResult } from "@/libs/FilterServiceBase";
 import {
 	storageDebugConfig,
 	storageRuleItems,
 	storageXTweetState,
-	TweetState,
+	type TweetState,
 } from "@/libs/storage";
-import { handleXResponseData, TimelineEntry } from "@/libs/x/ingest";
+import { handleXResponseData, type TimelineEntry } from "@/libs/x/ingest";
 import {
 	getModuleTweets,
 	getModuleTweetIds,
-	getModuleId,
 	getTweet,
 	tweetToMessages,
 	isAd,
     moduleToMessages,
 } from "@/libs/x/processing";
-import { TimelineItem, TimelineModule } from "@/libs/x/types";
-import { onMessage, sendMessage, allowWindowMessaging } from "webext-bridge/content-script";
+import type { TimelineItem, TimelineModule } from "@/libs/x/types";
+import { onMessage, sendMessage, allowWindowMessaging} from "webext-bridge/content-script";
+import type { ContentScriptContext, ShadowRootContentScriptUi } from "#imports";
+import ReactDOM from 'react-dom/client'
+import FPXOrb from "@/components/XWidget";
+import AsyncLock from 'async-lock';
+
+// Lock for all tweetState mutations to prevent race conditions
+const tweetStateLock = new AsyncLock();
 
 const getTweetStates = async () => {
 	const curStorage = new Map(Object.entries(await storageXTweetState.getValue()));
@@ -30,12 +36,77 @@ const setTweetStates = async (tweetStates: Map<string, TweetState>) => {
 	await storageXTweetState.setValue(newValue);
 }
 
+// Safe mutation functions that respect the async lock
 const updateTweetState = async (tweetId: string, update: Partial<TweetState>) => {
-	const curStorage = await getTweetStates();
-	const curState = curStorage.get(tweetId);
-	if (!curState) return;
-	curStorage.set(tweetId, { ...curState, ...update });
-	await setTweetStates(curStorage);
+	await tweetStateLock.acquire('tweetState', async () => {
+		const curStorage = await getTweetStates();
+		const curState = curStorage.get(tweetId);
+		if (!curState) return;
+		curStorage.set(tweetId, { ...curState, ...update });
+		await setTweetStates(curStorage);
+	});
+}
+
+const updateMultipleTweetStates = async (updates: Map<string, Partial<TweetState>>) => {
+	await tweetStateLock.acquire('tweetState', async () => {
+		const curStorage = await getTweetStates();
+		let hasChanges = false;
+		
+		for (const [tweetId, update] of updates.entries()) {
+			const curState = curStorage.get(tweetId);
+			if (curState) {
+				curStorage.set(tweetId, { ...curState, ...update });
+				hasChanges = true;
+			}
+		}
+		
+		if (hasChanges) {
+			await setTweetStates(curStorage);
+		}
+	});
+}
+
+const initializeTweetStates = async (initialStates: Map<string, TweetState>) => {
+	await tweetStateLock.acquire('tweetState', async () => {
+		const curStorage = await getTweetStates();
+		let hasUpdates = false;
+		
+		for (const [tweetId, state] of initialStates.entries()) {
+			if (!curStorage.has(tweetId)) {
+				curStorage.set(tweetId, state);
+				hasUpdates = true;
+			}
+		}
+		
+		if (hasUpdates) {
+			console.debug("initializeTweetStates", curStorage);
+			await setTweetStates(curStorage);
+		}
+	});
+}
+
+const setFilterResult = async (tweetId: string, filterResult: FilterResult) => {
+	await updateTweetState(tweetId, { filterResult });
+}
+
+const clearFilterResult = async (tweetId: string) => {
+	await updateTweetState(tweetId, { filterResult: undefined });
+}
+
+const clearMultipleFilterResults = async (tweetIds: string[]) => {
+	const updates = new Map<string, Partial<TweetState>>();
+	tweetIds.forEach(tweetId => {
+		updates.set(tweetId, { filterResult: undefined });
+	});
+	await updateMultipleTweetStates(updates);
+}
+
+const setMultipleFilterResults = async (tweetIds: string[], filterResult: FilterResult) => {
+	const updates = new Map<string, Partial<TweetState>>();
+	tweetIds.forEach(tweetId => {
+		updates.set(tweetId, { filterResult });
+	});
+	await updateMultipleTweetStates(updates);
 }
 
 const getTweetIdFromArticle = async (
@@ -63,18 +134,49 @@ const getTweetIdFromArticle = async (
 };
 
 // DOM tweet processing
-const renderTweetMod = async ({
+const uiMap = new Map<string, ShadowRootContentScriptUi<ReactDOM.Root>>();
+const renderLock = new AsyncLock();
+
+// Props comparison system to prevent infinite re-renders
+type TweetRenderProps = {
+	tweetId: string;
+	tweetState: TweetState;
+	isDebug: boolean;
+};
+
+const tweetPropsMap = new Map<string, TweetRenderProps>();
+
+const arePropsEqual = (prev: TweetRenderProps | undefined, next: TweetRenderProps): boolean => {
+	if (!prev) return false;
+	
+	return (
+		prev.tweetId === next.tweetId &&
+		prev.isDebug === next.isDebug &&
+		JSON.stringify(prev.tweetState) === JSON.stringify(next.tweetState)
+	);
+};
+
+const cleanupTweetUI = (tweetId: string) => {
+	const ui = uiMap.get(tweetId);
+	if(ui)ui.remove();
+	uiMap.delete(tweetId);
+};
+
+const renderTweetModInternal = async ({
 	tweetId,
 	tweetState,
 	isDebug,
 	element,
+	ctx
 }: {
 	tweetId: string;
 	tweetState: TweetState;
 	isDebug: boolean;
 	element: HTMLElement;
+	ctx: ContentScriptContext;
 }) => {
 	// STEP 1: apply style
+	element.setAttribute("data-fp", "true");
 	element.style.backgroundColor = "";
 	element.style.display = "block";
 	if (tweetState.filterResult === undefined) {
@@ -87,7 +189,71 @@ const renderTweetMod = async ({
 	}
 
 	// STEP 2: render orb ui
-	// TODO
+	const anchor = element.querySelector('button[aria-label="Grok actions"]')?.parentElement?.parentElement;
+	if(!anchor){
+		console.warn("no anchor found for tweet", tweetId, element);
+		return;
+	}
+	cleanupTweetUI(tweetId);
+	const ui = await createShadowRootUi(ctx, {
+		name: "fp-orb",
+		position: "inline",
+		anchor,
+		append: "first",
+		onMount(uiContainer) {
+			const app = document.createElement('div');
+			uiContainer.append(app);
+			const root = ReactDOM.createRoot(app);
+			root.render(<FPXOrb tweetId={tweetId} tweetState={tweetState} isDebug={isDebug} />);
+			return root;
+		}
+	})
+	ui.mount();
+	uiMap.set(tweetId, ui);
+	console.log("renderTweetMod", tweetId);
+};
+
+const renderTweetMod = async (params: {
+	tweetId: string;
+	tweetState: TweetState;
+	isDebug: boolean;
+	element: HTMLElement;
+	ctx: ContentScriptContext;
+}) => {
+	await renderLock.acquire(`tweet-${params.tweetId}`, async () => {
+		const { tweetId, tweetState, isDebug } = params;
+		
+		// Create current props object
+		const currentProps: TweetRenderProps = {
+			tweetId,
+			tweetState,
+			isDebug,
+		};
+		
+		// Check if props have changed
+		const previousProps = tweetPropsMap.get(tweetId);
+		const propsEqual = arePropsEqual(previousProps, currentProps);
+		const isTagged = params.element.hasAttribute("data-fp");
+		const shouldRender = !propsEqual || !isTagged;
+		
+		if (!shouldRender) {
+			// console.log("Skipping render for tweet", tweetId, "- props unchanged");
+			return;
+		}
+		
+		// Store current props for next comparison
+		tweetPropsMap.set(tweetId, currentProps);
+		
+		console.log("Rendering tweet", tweetId, {
+			shouldRender,
+			propsEqual,
+			isTagged,
+			previousProps,
+			currentProps,
+		});
+		await renderTweetModInternal(params);
+		return;
+	});
 };
 
 type Task = {
@@ -120,9 +286,7 @@ export default defineContentScript({
 					const abortController = new AbortController();
 					const curTask = taskMap.get(tweetId);
 					if (curTask && !isFinished(curTask)) curTask.abortController.abort();
-					await updateTweetState(tweetId, {
-						filterResult: undefined,
-					});
+					await clearFilterResult(tweetId);
 
 					const tsk = async () => {
 						const filterResult: FilterResult = isAd(entry as TimelineItem)
@@ -135,17 +299,8 @@ export default defineContentScript({
 							console.log("Early return: abortController.signal.aborted is true");
 							return;
 						}
-						const curValue = await getTweetStates();
-						const curTweetState = curValue.get(tweetId);
-						if (!curTweetState) {
-							console.log("Early return: no curTweetState for tweetId", tweetId);
-							return;
-						}
-						curValue.set(tweetId, {
-							...curTweetState,
-							filterResult,
-						});
-						await setTweetStates(curValue);
+						
+						await setFilterResult(tweetId, filterResult);
                         abortController.abort();
 					};
 					const promise = tsk();
@@ -168,27 +323,16 @@ export default defineContentScript({
                     })
 
                     const abortController = new AbortController();
-					await Promise.all(tweetIds.map(async (tweetId) => {
-						await updateTweetState(tweetId, {
-							filterResult: undefined,
-						});
-					}));
+					await clearMultipleFilterResults(tweetIds);
+                    
                     const tsk = async () => {
                         const filterResult = await filterService.filter(
                             moduleToMessages(module),
                             rules,
                         )
-                        const curValue = await getTweetStates();
                         if(abortController.signal.aborted)return;
-                        for(const tweetId of tweetIds){
-                            const gotValue = curValue.get(tweetId);
-                            if(!gotValue)continue;
-                            curValue.set(tweetId, {
-                                ...gotValue,
-                                filterResult,
-                            })
-                        }
-                        await setTweetStates(curValue);
+                        
+                        await setMultipleFilterResults(tweetIds, filterResult);
                         abortController.abort();
                     }
                     const promise = tsk();
@@ -205,9 +349,7 @@ export default defineContentScript({
 		};
 
         const initTweetsData = async(entries: TimelineEntry[]) => {
-            const curStorage = await getTweetStates();
-			console.log("initTweetsData", curStorage);
-            let hasUpdates = false;
+            const initialStates = new Map<string, TweetState>();
             
             for(const entry of entries){
                 const entryId = entry.entryId;
@@ -217,14 +359,11 @@ export default defineContentScript({
                     const tweet = getTweet(entry as TimelineItem);
                     if(tweet?.rest_id){
                         const tweetId = tweet.rest_id;
-                        if(!curStorage.has(tweetId)){
-                            curStorage.set(tweetId, {
-                                tweetData: tweet,
-                                isExpanded: false,
-                                filterResult: undefined
-                            });
-                            hasUpdates = true;
-                        }
+                        initialStates.set(tweetId, {
+                            tweetData: tweet,
+                            isExpanded: false,
+                            filterResult: undefined
+                        });
                     }
                 } else if(entry.content.__typename === "TimelineTimelineModule"){
                     // Handle tweet modules (conversations, threads)
@@ -233,23 +372,17 @@ export default defineContentScript({
                     const tweets = getModuleTweets(module);
                     
                     tweetIds.forEach((tweetId, index) => {
-                        if(!curStorage.has(tweetId)){
-                            curStorage.set(tweetId, {
-                                tweetData: tweets[index],
-                                isExpanded: false,
-                                filterResult: undefined
-                            });
-                            hasUpdates = true;
-                        }
+                        initialStates.set(tweetId, {
+                            tweetData: tweets[index],
+                            isExpanded: false,
+                            filterResult: undefined
+                        });
                     });
                 }
             }
             
-            if(hasUpdates){
-				console.debug("hasUpdates", curStorage);
-				console.debug("before", await storageXTweetState.getValue());
-                await setTweetStates(curStorage);
-				console.debug("after", await storageXTweetState.getValue());
+            if(initialStates.size > 0){
+                await initializeTweetStates(initialStates);
             }
         }
 
@@ -297,6 +430,7 @@ export default defineContentScript({
 						tweetState,
 						isDebug,
 						element: article,
+						ctx,
 					});
 				},
 			);
