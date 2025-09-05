@@ -6,11 +6,14 @@ export const PIPE_AGENT_MODEL = "anthropic/claude-4-sonnet";
 export const AUTO_MODEL = "AUTO";
 
 export const getModel = (model: string) => {
-  console.log(`Getting model ${model}`);
-  let gateway = createGateway({
-    apiKey: import.meta.env.WXT_AI_GATEWAY_API_KEY,
-    baseURL: import.meta.env.WXT_AI_GATEWAY_BASE_URL,
-  });
-  console.log(import.meta.env);
-  return gateway(model);
+	console.log(`Getting model ${model}`);
+	console.log("envs", {
+		WXT_AI_GATEWAY_API_KEY: import.meta.env.WXT_AI_GATEWAY_API_KEY,
+		WXT_AI_GATEWAY_BASE_URL: import.meta.env.WXT_AI_GATEWAY_BASE_URL,
+	});
+	let gateway = createGateway({
+		apiKey: import.meta.env.WXT_AI_GATEWAY_API_KEY,
+		baseURL: import.meta.env.WXT_AI_GATEWAY_BASE_URL,
+	});
+	return gateway(model);
 };
