@@ -180,11 +180,11 @@ const renderTweetModInternal = async ({
 	element.style.backgroundColor = "";
 	element.style.display = "block";
 	if (tweetState.filterResult === undefined) {
-		if (isDebug) element.style.backgroundColor = "yellow";
+		if (isDebug) element.style.backgroundColor = "rgba(255, 235, 59, 0.18)";
 	} else if (tweetState.filterResult.type === "pass") {
-		if (isDebug) element.style.backgroundColor = "green";
+		if (isDebug) element.style.backgroundColor = "rgba(76, 175, 80, 0.16)";
 	} else if (tweetState.filterResult.type === "block") {
-		if (isDebug) element.style.backgroundColor = "red";
+		if (isDebug) element.style.backgroundColor = "rgba(244, 67, 54, 0.14)";
 		else element.style.display = "none";
 	}
 
@@ -204,7 +204,7 @@ const renderTweetModInternal = async ({
 			const app = document.createElement('div');
 			uiContainer.append(app);
 			const root = ReactDOM.createRoot(app);
-			root.render(<FPXOrb tweetId={tweetId} tweetState={tweetState} isDebug={isDebug} />);
+			root.render(<FPXOrb _tweetId={tweetId} tweetState={tweetState} _isDebug={isDebug} />);
 			return root;
 		}
 	})
@@ -272,6 +272,18 @@ export default defineContentScript({
 		const filterService = getFilterService();
 		allowWindowMessaging("main");
 		await injectScript("/x-mainworld.js", { keepInDom: true });
+
+		const getDOMTweets = async () => {
+			const articles = Array.from(document.querySelectorAll("article"));
+
+			const tweetIdPromises = articles.map(async (article) => {
+				const tweetId = await getTweetIdFromArticle(article as HTMLElement);
+				return { article, tweetId };
+			});
+
+			const results = await Promise.all(tweetIdPromises);
+			return results;
+		}
 
 		// MARK: Handle API Tweets
 		const taskMap = new Map<string, Task>();
@@ -395,26 +407,42 @@ export default defineContentScript({
 		});
 
         storageRuleItems.watch(async () => {
-            for(const entry of entriesCache.values()){
-                spawnFilter(entry)
+			console.log("storage: storageRuleItems changed, syncing tweets");
+			const domTweets = await getDOMTweets();
+			const needClearTweets: string[] = [];
+            for(const entry of domTweets){
+				if(!entry.tweetId) continue;
+				const cached = entriesCache.get(entry.tweetId);
+				if(!cached) continue;
+				switch(cached.content.__typename){
+					case "TimelineTimelineItem":{
+						needClearTweets.push(entry.tweetId);
+						break;
+					}
+					case "TimelineTimelineModule":{
+						needClearTweets.push(...cached.content.items.map((item) => item.entryId));
+						break;
+					}
+				}
             }
+			await clearMultipleFilterResults(needClearTweets);
+			console.log("storage: cleared tweets, now spawning filters");
+			for(const entry of domTweets){
+				if(!entry.tweetId) continue;
+				const cached = entriesCache.get(entry.tweetId);
+				if(!cached) continue;
+				spawnFilter(cached);
+			}
         })
 
 		// MARK: Sync DOM tweets
 		const syncTweets = async () => {
-			const articles = Array.from(document.querySelectorAll("article"));
-
-			const tweetIdPromises = articles.map(async (article) => {
-				const tweetId = await getTweetIdFromArticle(article as HTMLElement);
-				return { article, tweetId };
-			});
-
-			const results = await Promise.all(tweetIdPromises);
 			const tweetStates = await getTweetStates();
 			console.debug("tweetStates", tweetStates, typeof tweetStates);
 			const isDebug = await storageDebugConfig.getValue();
 
-			const renderTweetModPromises = results.map(
+			const domTweets = await getDOMTweets();
+			const renderTweetModPromises = domTweets.map(
 				async ({ article, tweetId }) => {
 					if (!tweetId) {
 						console.warn("no tweet id found for article", article);
